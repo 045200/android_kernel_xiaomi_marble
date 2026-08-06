@@ -16,8 +16,8 @@ jobs:
           
           mkdir -p ${HOME}/build_toolchain
           cd ${HOME}/build_toolchain
-          aria2c https://mirrors.edge.kernel.org/pub/tools/llvm/files/llvm-22.1.8-x86_64.tar.xz
-          tar -xJf ./llvm-22.1.8-x86_64.tar.xz
+          aria2c https://mirrors.edge.kernel.org/pub/tools/llvm/files/llvm-23.1.0-rc2-x86_64.tar.xz
+          tar -xJf ./llvm-23.1.0-rc2-x86_64.tar.xz
           
           mkdir -p ${HOME}/build_toolchain/7z2602-linux-x64
           cd ${HOME}/build_toolchain/7z2602-linux-x64
