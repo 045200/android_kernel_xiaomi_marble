@@ -1,0 +1,78 @@
+name: Build Kernel
+
+on:
+  push:
+    branches: [bouquet_ci]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Prepare the environment
+        run: |
+          echo "SHORT_SHA=${GITHUB_SHA:0:12}" >> $GITHUB_ENV
+          
+          sudo apt install -y aria2 python3 python-is-python3 python3-rich
+          
+          mkdir -p ${HOME}/build_toolchain
+          cd ${HOME}/build_toolchain
+          aria2c https://mirrors.edge.kernel.org/pub/tools/llvm/files/llvm-22.1.8-x86_64.tar.xz
+          tar -xJf ./llvm-22.1.8-x86_64.tar.xz
+          
+          mkdir -p ${HOME}/build_toolchain/7z2602-linux-x64
+          cd ${HOME}/build_toolchain/7z2602-linux-x64
+          wget -nv https://github.com/ip7z/7zip/releases/download/26.02/7z2602-linux-x64.tar.xz
+          tar -xJf ./7z2602-linux-x64.tar.xz
+          ln -s ./7zzs ./7za
+          
+          mkdir -p ${HOME}/build_toolchain/hdiffpatch
+          cd ${HOME}/build_toolchain/hdiffpatch
+          wget -nv https://github.com/sisong/HDiffPatch/releases/download/v4.12.2/hdiffpatch_v4.12.2_bin_linux64.zip
+          ${HOME}/build_toolchain/7z2602-linux-x64/7za x ./hdiffpatch_v4.12.2_bin_linux64.zip
+          chmod +x ./linux64/*
+          
+          mkdir -p ${HOME}/dist
+      - name: Check out
+        uses: actions/checkout@v4
+        with:
+          ref: "bouquet_ci"
+      - name: Build kernel Image & modules
+        run: |
+          cd $GITHUB_WORKSPACE
+          ./build_bouquet_ci.sh --noccache
+          cp -r ${HOME}/Bouquet_marble_out/* ${HOME}/dist/
+      - name: Build kernel Image with KernelSU
+        run: |
+          cd $HOME
+          git clone https://github.com/tiann/KernelSU.git
+          cd $GITHUB_WORKSPACE
+          ./build_bouquet_ci.sh --noccache --noclean --ksu -- Image
+          cp ${HOME}/Bouquet_marble_out/Image_ksu* ${HOME}/dist/
+      - name: Build kernel Image with KernelSU & susfs
+        run: |
+          cd $HOME
+          git clone https://gitlab.com/simonpunk/susfs4ksu.git -b gki-android12-5.10
+          cd $GITHUB_WORKSPACE
+          ./build_bouquet_ci.sh --noccache --susfs -- Image
+          cp ${HOME}/Bouquet_marble_out/Image_susfs* ${HOME}/dist/
+      - name: Package AK3
+        run: |
+          cd $HOME
+          git clone https://github.com/Pzqqt/AnyKernel3.git -b Marble-Bouquet --depth=1
+          cd AnyKernel3
+          
+          cp -f ${HOME}/dist/devicetree/ukee.dtb ./_dtb/dtb
+          cp -f ${HOME}/dist/devicetree/dtbo.img ./_dtb/dtbo.img
+          cp -f ${HOME}/dist/alt_kernel_modules/* ./_modules_hyperos/_alt/
+          cp -f ${HOME}/dist/vendor_boot_modules/* ./_modules_hyperos/_vendor_boot_modules/
+          cp -f ${HOME}/dist/vendor_dlkm_modules/* ./_modules_hyperos/_vendor_dlkm_modules/
+          cp -f ${HOME}/dist/Image* ./
+          
+          export PATH=$(realpath ${HOME}/build_toolchain/7z2602-linux-x64):$(realpath ${HOME}/build_toolchain/hdiffpatch/linux64):${PATH}
+          python3 ./make_package.py "ci-${SHORT_SHA}"
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          path: "~/AnyKernel3/Bouquet-Kernel-ci-${{ env.SHORT_SHA }}.zip"
+          if-no-files-found: error
+          archive: false
